@@ -9,6 +9,7 @@ import ConfigParser
 import argparse
 from astropy.io import fits
 import numpy as np
+import sys
 
 
 def get_config_file_names(config,args):
@@ -91,6 +92,25 @@ def tests_for_size_one(hdulist_out, hdulist_expected, elem):
             print ("\t\tOutput file value at this location = {}, Expected file = {}".format(hdulist_out[elem].data[where_false[0][x]],
                 hdulist_expected[elem].data[where_false[0][x]]))
 
+def tests_for_BinTableHDU(hdulist_out, hdulist_expected, elem):
+    rows_not_present = []
+
+    for out_row in range(0,len(hdulist_out[elem].data)):
+        checker = False
+        checker_val = 0
+        for expected_row in range(0,len(hdulist_expected[elem].data)):
+            if set(hdulist_out[elem].data[out_row]).issubset(set(hdulist_expected[elem].data[expected_row])):
+                checker = True
+        if not checker:
+            rows_not_present.append(hdulist_out[elem].data[out_row])
+
+    if rows_not_present:
+        print ("\tThe following rows are not identical:")
+        for row in rows_not_present:
+            print ("\t\t{}".format(row))
+    else:
+        print ("\tRows in table are identical")
+
 def even_deeper_tests(output_file, expected_output_file, all_elems_out):
     """
     Checks to see where exactly the files differ on the scale of pixel values within
@@ -103,6 +123,9 @@ def even_deeper_tests(output_file, expected_output_file, all_elems_out):
         if hdulist_out[elem].data is None:
             print ("{} has no dimensions to check".format(elem))
             pass
+        elif (isinstance(hdulist_out[elem], fits.hdu.table._TableBaseHDU)):
+            print ("Checking values for {} inside its BinTable".format(elem))
+            tests_for_BinTableHDU(hdulist_out, hdulist_expected, elem)
         elif not (isinstance(hdulist_out[elem], (fits.hdu.image.ImageHDU, fits.hdu.image.PrimaryHDU))):
             print ("{} is not of the appropriate type (ImageHDU or PrimaryHDU)".format(elem))
             pass
@@ -139,19 +162,21 @@ def deeper_tests(output_file, expected_output_file):
     print ("{} headers: {}".format(expected_output_file, all_elems_expected))
 
     if all_elems_out == all_elems_expected:
-        print ("Both files have the same headers, now checking for SCI dimensions...\n")
+        print ("Both files have the same headers, now checking dimensions and pixels for each header...\n")
+        even_deeper_tests(output_file, expected_output_file, all_elems_out)
+        return True
     else:
         print ("Files do not have the same headers")
         return False
-
-    print ("{} SCI dimensions: {}".format(output_file, hdulist_out['SCI'].shape))
-    print ("{} SCI dimensions: {}".format(expected_output_file, hdulist_expected['SCI'].shape))
-
-    if hdulist_out['SCI'].shape == hdulist_expected['SCI'].shape:
-        print ("Both files have the same SCI dimensions, now checking individual pixels...\n")
-    else:
-        print("Files do not have the same SCI dimensions")
-        return False
+    #
+    # print ("{} SCI dimensions: {}".format(output_file, hdulist_out['SCI'].shape))
+    # print ("{} SCI dimensions: {}".format(expected_output_file, hdulist_expected['SCI'].shape))
+    #
+    # if hdulist_out['SCI'].shape == hdulist_expected['SCI'].shape:
+    #     print ("Both files have the same SCI dimensions, now checking individual pixels...\n")
+    # else:
+    #     print("Files do not have the same SCI dimensions")
+    #     return False
 
     even_deeper_tests(output_file, expected_output_file, all_elems_out)
     return True
@@ -175,9 +200,18 @@ def comparison_tests(all_file_pairs):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("chosen_config")
+parser.add_argument("chosen_config", nargs = "?", default = "None", help= "The Config file with the files that are to be compared, or file 1 of the files to be compared")
+parser.add_argument("chosen_file", nargs='?', default='None', help = "(Optional) file 2 of files to be compared in command line")
 args = parser.parse_args()
 
-config = ConfigParser.ConfigParser()
-all_file_pairs = get_config_file_names(config,args)
-comparison_tests(all_file_pairs)
+if len(sys.argv) == 2 and not args.chosen_config == "None":
+    config = ConfigParser.ConfigParser()
+    all_file_pairs = get_config_file_names(config,args)
+    comparison_tests(all_file_pairs)
+elif len(sys.argv) == 3 and not args.chosen_file == "None" and not args.chosen_config == "None":
+    file_pair = [(args.chosen_config, args.chosen_file)]
+    comparison_tests(file_pair)
+else:
+    print ("Incorrect number of arguements, format is either:")
+    print ("\tpython compare_fits.py [chosen_config]")
+    print ("\tpython compare_fits.py [file_to_compare1] [file_to_compare2]")
