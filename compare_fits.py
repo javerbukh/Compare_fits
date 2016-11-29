@@ -105,7 +105,7 @@ def tests_for_BinTableHDU(hdulist_out, hdulist_expected, elem):
             rows_not_present.append(hdulist_out[elem].data[out_row])
 
     if rows_not_present:
-        print ("\tThe following rows are not identical:")
+        print ("\tThe following rows in file 1 are not present in file 2:")
         for row in rows_not_present:
             print ("\t\t{}".format(row))
     else:
